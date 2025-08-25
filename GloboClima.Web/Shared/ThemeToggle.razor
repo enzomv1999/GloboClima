@@ -1,0 +1,49 @@
+@namespace GloboClima.Web.Shared
+@using GloboClima.Web.Services
+@inject IThemeService ThemeService
+@implements IDisposable
+
+<div class="theme-toggle" @onclick="ToggleTheme">
+    <i class="bi @(ThemeService.IsDarkMode ? "bi-moon-fill" : "bi-sun-fill") me-2"></i>
+    <span>@(ThemeService.IsDarkMode ? "Modo Escuro" : "Modo Claro")</span>
+</div>
+
+@code {
+    private bool _isClientSide = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _isClientSide = true;
+            await ThemeService.InitializeAsync();
+            StateHasChanged();
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        ThemeService.OnThemeChanged += OnThemeChangedHandler;
+    }
+
+    private void OnThemeChangedHandler()
+    {
+        if (_isClientSide)
+        {
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ToggleTheme()
+    {
+        if (_isClientSide)
+        {
+            await ThemeService.ToggleThemeAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= OnThemeChangedHandler;
+    }
+}

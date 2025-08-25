@@ -1,0 +1,100 @@
+@using GloboClima.Web.Services
+@using GloboClima.Web.Shared
+@inherits LayoutComponentBase
+@implements IDisposable
+
+<PageTitle>GloboClima - Previsão do Tempo</PageTitle>
+
+<div class="d-flex flex-column min-vh-100">
+    <header class="border-bottom">
+        <div class="container-fluid">
+            <div class="d-flex flex-wrap align-items-center justify-content-between py-2">
+                <a href="/" class="d-flex align-items-center text-body text-decoration-none">
+                    <i class="bi bi-cloud-sun fs-3 me-2"></i>
+                    <span class="fs-4 fw-bold">GloboClima</span>
+                </a>
+                
+                <div class="d-flex align-items-center">
+                    <ThemeToggle />
+                    
+                    @if (ApiService.IsAuthenticated)
+                    {
+                        <div class="dropdown ms-3">
+                            <button class="btn btn-link text-decoration-none dropdown-toggle" 
+                                    type="button" 
+                                    id="userDropdown" 
+                                    data-bs-toggle="dropdown" 
+                                    aria-expanded="false">
+                                <i class="bi bi-person-circle fs-4"></i>
+                                <span class="ms-1 d-none d-md-inline">
+                                    @(ApiService.CurrentUser?.Name ?? "Usuário")
+                                </span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                                <li><a class="dropdown-item" href="/favorites"><i class="bi bi-heart me-2"></i>Favoritos</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-danger" @onclick="Logout"><i class="bi bi-box-arrow-right me-2"></i>Sair</a></li>
+                            </ul>
+                        </div>
+                    }
+                    else
+                    {
+                        <a href="/login" class="btn btn-outline-primary ms-3">
+                            <i class="bi bi-box-arrow-in-right me-1"></i> Entrar
+                        </a>
+                    }
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow-1 py-3">
+        <div class="container-fluid">
+            @Body
+        </div>
+    </main>
+
+    <footer class="footer mt-auto py-3 border-top">
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col-12 text-center text-muted">
+                    <i class="bi bi-cloud-sun me-2"></i>
+                    &copy; @DateTime.Now.Year - GloboClima - Todos os direitos reservados
+                </div>
+            </div>
+        </div>
+    </footer>
+</div>
+
+@inject ApiService ApiService
+@inject NavigationManager NavigationManager
+@inject NotificationService NotificationService
+
+@code {
+    private bool initialized;
+    private bool isDisposed;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !initialized)
+        {
+            initialized = true;
+            await ApiService.LoadToken();
+            StateHasChanged();
+        }
+    }
+
+    private async Task Logout()
+    {
+        await ApiService.Logout();
+        NavigationManager.NavigateTo("/", true);
+    }
+
+    public void Dispose()
+    {
+        if (!isDisposed)
+        {
+            isDisposed = true;
+        }
+    }
+}

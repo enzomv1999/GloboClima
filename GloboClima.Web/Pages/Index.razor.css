@@ -1,0 +1,52 @@
+.home-page {
+  background: var(--body-bg);
+}
+
+.hero-section {
+  background: var(--body-bg);
+}
+
+.hero-content {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 1rem;
+  padding: 2rem 2.25rem;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+}
+
+.hero-icon {
+  color: var(--primary-color);
+  font-size: 3rem;
+  display: inline-block;
+  margin-bottom: 0.75rem;
+}
+
+.features-section {
+  background: var(--body-bg);
+}
+
+.feature-card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 0.75rem;
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+  border-color: var(--primary-color);
+}
+
+.feature-icon i {
+  font-size: 1.75rem;
+  color: var(--primary-color);
+}
+
+.cta-section {
+  background: var(--body-bg);
+}
+
+@media (max-width: 576px) {
+  .hero-content { padding: 1.5rem; }
+}

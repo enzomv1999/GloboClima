@@ -1,0 +1,162 @@
+@page "/login"
+@using GloboClima.Web.Models
+@using GloboClima.Web.Services
+@inject ApiService ApiService
+@inject NavigationManager NavigationManager
+@inject NotificationService NotificationService
+@inject IThemeService ThemeService
+
+<div class="auth-page">
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <div class="logo-container">
+                    <i class="bi bi-cloud-sun-fill logo-icon"></i>
+                    <h1>GloboClima</h1>
+                </div>
+                <h2>Bem-vindo de volta</h2>
+                <p class="text-muted">Faça login para continuar</p>
+            </div>
+
+            @if (!string.IsNullOrEmpty(ErrorMessage))
+            {
+                <div class="alert alert-danger" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>@ErrorMessage
+                </div>
+            }
+
+            <EditForm Model="loginModel" OnValidSubmit="HandleLogin" class="auth-form">
+                <DataAnnotationsValidator />
+                
+                <div class="form-group">
+                    <label for="username" class="form-label">Usuário</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
+                        <InputText id="username" class="form-control form-control-lg" 
+                                 @bind-Value="loginModel.Username" 
+                                 placeholder="Digite seu usuário" />
+                    </div>
+                    <ValidationMessage For="@(() => loginModel.Username)" class="text-danger small" />
+                </div>
+                
+                <div class="form-group">
+                    <label for="password" class="form-label">Senha</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+                        <InputText id="password" type="password" 
+                                 class="form-control form-control-lg" 
+                                 @bind-Value="loginModel.Password" 
+                                 placeholder="••••••••" />
+                    </div>
+                    <ValidationMessage For="@(() => loginModel.Password)" class="text-danger small" />
+                </div>
+
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary btn-lg w-100" disabled="@isLoading">
+                        @if (isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            <span>Entrando...</span>
+                        }
+                        else
+                        {
+                            <span>Entrar</span>
+                        }
+                    </button>
+                </div>
+            </EditForm>
+
+            <div class="auth-footer">
+                <p class="text-muted">
+                    Ainda não tem uma conta? 
+                    <a href="/register" class="auth-link">Criar conta</a>
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="auth-background">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+    </div>
+</div>
+
+@code {
+    private User loginModel = new();
+    private string ErrorMessage = string.Empty;
+    private bool isLoading = false;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await ApiService.LoadToken();
+            if (ApiService.IsAuthenticated)
+            {
+                NavigationManager.NavigateTo("/weather", true);
+                return;
+            }
+        }
+    }
+
+    private async Task HandleLogin()
+    {
+        try
+        {
+            isLoading = true;
+            ErrorMessage = string.Empty;
+            StateHasChanged();
+
+            var token = await ApiService.Login(loginModel);
+            if (string.IsNullOrEmpty(token))
+            {
+                ErrorMessage = "Credenciais inválidas. Verifique seu usuário e senha.";
+                return;
+            }
+
+            await ApiService.SetToken(token);
+            await NotificationService.ShowSuccessAsync("Login realizado com sucesso!");
+
+            try
+            {
+                var favorites = await ApiService.GetFavorites();
+                if (favorites != null && favorites.Any())
+                {
+                    var cityFav = favorites.FirstOrDefault(f => f.Type.Equals("city", StringComparison.OrdinalIgnoreCase));
+                    if (cityFav != null && !string.IsNullOrWhiteSpace(cityFav.Name))
+                    {
+                        var q = Uri.EscapeDataString(cityFav.Name);
+                        NavigationManager.NavigateTo($"/weather?city={q}", true);
+                    }
+                    else
+                    {
+                        NavigationManager.NavigateTo("/favorites", true);
+                    }
+                }
+                else
+                {
+                    NavigationManager.NavigateTo("/weather", true);
+                }
+            }
+            catch
+            {
+                NavigationManager.NavigateTo("/weather", true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = "Ocorreu um erro ao tentar fazer login. Tente novamente.";
+            Console.Error.WriteLine($"Login error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+}

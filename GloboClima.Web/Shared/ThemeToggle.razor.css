@@ -1,0 +1,17 @@
+.theme-toggle {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    transition: background-color 0.2s;
+}
+
+.theme-toggle:hover {
+    background-color: var(--primary-light);
+}
+
+.theme-toggle i {
+    font-size: 1.25rem;
+}

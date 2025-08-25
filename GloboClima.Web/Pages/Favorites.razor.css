@@ -1,0 +1,26 @@
+.favorites-page { background: var(--body-bg); min-height: 60vh; padding-top: .5rem; }
+
+.empty-state { text-align: center; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: .75rem; padding: 2rem; }
+.empty-state i { color: var(--primary-color); }
+
+.favorite-list { display: flex; flex-direction: column; gap: .75rem; }
+
+.favorite-item {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: .75rem;
+  padding: .75rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.favorite-item:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,.08); border-color: var(--primary-color); }
+
+.favorite-meta { display: flex; align-items: center; gap: .75rem; }
+.favorite-badge { text-transform: uppercase; font-size: .7rem; letter-spacing: .04em; padding: .15rem .5rem; border-radius: .5rem; background: var(--primary-light); color: var(--primary-color); }
+.favorite-name { font-weight: 600; color: var(--body-color); }
+
+.favorite-actions { display: flex; align-items: center; gap: .5rem; }
+.favorite-actions .btn { white-space: nowrap; }

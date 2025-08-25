@@ -1,0 +1,174 @@
+@using GloboClima.Web.Services
+@using GloboClima.Web.Shared
+@using Microsoft.AspNetCore.Components.Routing
+@inject ApiService ApiService
+@inject NavigationManager NavigationManager
+@inject NotificationService NotificationService
+@inject IThemeService ThemeService
+@implements IDisposable
+
+<nav class="navbar navbar-expand-lg">
+    <div class="container">
+        <a class="navbar-brand d-flex align-items-center" href="/">
+            <i class="bi bi-cloud-sun-fill me-2"></i>
+            <span class="fw-bold">GloboClima</span>
+        </a>
+
+        <button class="navbar-toggler" type="button" 
+                @onclick="ToggleMobileMenu"
+                aria-expanded="@_isMobileMenuOpen"
+                aria-label="Alternar navegação">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse @( _isMobileMenuOpen ? "show" : string.Empty)" id="mainNavbar">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="/" Match="NavLinkMatch.All" @onclick="CloseMobileMenu">
+                        <i class="bi bi-house-door me-1"></i>
+                        Início
+                    </NavLink>
+                </li>
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="/weather" @onclick="CloseMobileMenu">
+                        <i class="bi bi-search me-1"></i>
+                        Buscar Cidades
+                    </NavLink>
+                </li>
+                @if (ApiService.IsAuthenticated)
+                {
+                    <li class="nav-item">
+                        <NavLink class="nav-link" href="/favorites" @onclick="CloseMobileMenu">
+                            <i class="bi bi-star me-1"></i>
+                            Favoritos
+                        </NavLink>
+                    </li>
+                }
+            </ul>
+
+            <div class="d-flex align-items-center gap-2">
+                <button class="theme-toggle btn btn-link text-decoration-none"
+                        @onclick="ToggleTheme"
+                        title="@(ThemeService.IsDarkMode ? "Mudar para tema claro" : "Mudar para tema escuro")">
+                    <i class="bi @(ThemeService.IsDarkMode ? "bi-sun-fill" : "bi-moon-stars-fill")"></i>
+                    <span class="ms-1 d-none d-md-inline">
+                        @(ThemeService.IsDarkMode ? "Tema Claro" : "Tema Escuro")
+                    </span>
+                </button>
+
+                @if (ApiService.IsAuthenticated)
+                {
+                    <button class="btn-logout d-flex align-items-center" @onclick="Logout" title="Sair">
+                        <i class="bi bi-box-arrow-right me-1"></i>
+                        <span class="d-none d-md-inline">Sair</span>
+                    </button>
+                }
+                else
+                {
+                    <div class="d-flex gap-2">
+                        <a href="/login" class="btn btn-outline-primary">
+                            <i class="bi bi-box-arrow-in-right me-1"></i>
+                            <span class="d-none d-md-inline">Entrar</span>
+                        </a>
+                        <a href="/register" class="btn btn-primary">
+                            <i class="bi bi-person-plus me-1"></i>
+                            <span class="d-none d-md-inline">Cadastrar</span>
+                        </a>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</nav>
+
+@code {
+    private bool _disposed;
+    private bool _isDarkMode;
+    private bool _isMobileMenuOpen = false;
+    private DotNetObjectReference<NavMenu>? _dotNetObjectReference;
+
+    protected override void OnInitialized()
+    {
+        _isDarkMode = ThemeService.IsDarkMode;
+        ThemeService.OnThemeChanged += OnThemeChanged;
+        _dotNetObjectReference = DotNetObjectReference.Create(this);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                await ThemeService.InitializeAsync();
+                _isDarkMode = ThemeService.IsDarkMode;
+                StateHasChanged();
+            }
+            catch { }
+        }
+    }
+
+    private async Task ToggleTheme()
+    {
+        await ThemeService.ToggleThemeAsync();
+        _isDarkMode = ThemeService.IsDarkMode;
+    }
+
+    private async Task Logout()
+    {
+        try
+        {
+            await ApiService.Logout();
+            CloseMobileMenu();
+            NavigationManager.NavigateTo("/", true);
+        }
+        catch (Exception ex)
+        {
+            await NotificationService.ShowErrorAsync(ex.Message, "Erro ao fazer logout");
+        }
+    }
+
+    private void ToggleMobileMenu()
+    {
+        _isMobileMenuOpen = !_isMobileMenuOpen;
+        StateHasChanged();
+    }
+
+    private void CloseMobileMenu()
+    {
+        _isMobileMenuOpen = false;
+        StateHasChanged();
+    }
+
+    private void OnThemeChanged()
+    {
+        _isDarkMode = ThemeService.IsDarkMode;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void CloseMenu()
+    {
+        _isMobileMenuOpen = false;
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposed)
+        {
+            if (disposing)
+            {
+                ThemeService.OnThemeChanged -= OnThemeChanged;
+                _dotNetObjectReference?.Dispose();
+            }
+            _disposed = true;
+        }
+    }
+}

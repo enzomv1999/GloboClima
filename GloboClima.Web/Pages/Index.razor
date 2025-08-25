@@ -1,0 +1,179 @@
+@page "/"
+@using GloboClima.Web.Services
+@using GloboClima.Web.Models
+@inject ApiService ApiService
+@inject NavigationManager NavigationManager
+
+<div class="home-page">
+    <section class="hero-section text-center py-5">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="hero-content">
+                        <i class="bi bi-cloud-sun hero-icon"></i>
+                        <h1 class="display-4 fw-bold mb-3">Bem-vindo ao GloboClima</h1>
+                        <p class="lead mb-4">Consulte o clima de qualquer cidade do mundo e obtenha informações detalhadas sobre o clima e o país. Acompanhe suas cidades favoritas e esteja sempre preparado para qualquer condição climática.</p>
+                        
+                        @if (!ApiService.IsAuthenticated)
+                        {
+                            <div class="d-flex justify-content-center gap-3">
+                                <NavLink class="btn btn-primary btn-lg" href="/login">
+                                    <i class="bi bi-box-arrow-in-right me-2"></i>Entrar
+                                </NavLink>
+                                <NavLink class="btn btn-outline-primary btn-lg" href="/register">
+                                    <i class="bi bi-person-plus me-2"></i>Cadastrar
+                                </NavLink>
+                            </div>
+                        }
+                        else
+                        {
+                            <NavLink class="btn btn-success btn-lg px-4" href="/weather">
+                                <i class="bi bi-cloud-sun me-2"></i>Ver Previsão do Tempo
+                            </NavLink>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    @if (ApiService.IsAuthenticated)
+    {
+        <section class="py-4">
+            <div class="container">
+                <div class="card shadow-sm border-0">
+                    <div class="card-body d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="h5 mb-1">Acesso rápido</div>
+                            <div class="text-muted">Consulte o clima e acesse seus favoritos.</div>
+                        </div>
+                        <NavLink class="btn btn-success" href="/weather">
+                            <i class="bi bi-cloud-sun me-2"></i>Ver clima
+                        </NavLink>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="py-4">
+            <div class="container">
+                <h2 class="h5 mb-3">Seus favoritos</h2>
+
+                @if (isFavLoading)
+                {
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                    </div>
+                }
+                else if (favorites == null || !favorites.Any())
+                {
+                    <div class="text-muted">Você ainda não possui favoritos.</div>
+                }
+                else
+                {
+                    <div class="cards-grid">
+                        @foreach (var item in favorites)
+                        {
+                            <div class="card card-fav">
+                                <div class="card-body d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <div class="small text-uppercase text-muted">@item.Type</div>
+                                        <div class="fw-semibold">@item.Name</div>
+                                    </div>
+                                    @if (string.Equals(item.Type, "city", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <NavLink class="btn btn-sm btn-primary" href="@($"/weather?city={Uri.EscapeDataString(item.Name ?? string.Empty)}")">
+                                            <i class="bi bi-box-arrow-up-right me-1"></i>Abrir
+                                        </NavLink>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </section>
+    }
+
+    <section class="features-section py-5">
+        <div class="container">
+            <h2 class="text-center mb-5">Recursos Incríveis</h2>
+            
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="feature-card p-4 h-100">
+                        <div class="feature-icon mb-3">
+                            <i class="bi bi-search"></i>
+                        </div>
+                        <h3>Busca Avançada</h3>
+                        <p>Encontre qualquer cidade do mundo e obtenha informações detalhadas sobre o clima em tempo real.</p>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="feature-card p-4 h-100">
+                        <div class="feature-icon mb-3">
+                            <i class="bi bi-star"></i>
+                        </div>
+                        <h3>Favoritos</h3>
+                        <p>Salve suas cidades favoritas para um acesso rápido e fácil às previsões do tempo.</p>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="feature-card p-4 h-100">
+                        <div class="feature-icon mb-3">
+                            <i class="bi bi-globe-americas"></i>
+                        </div>
+                        <h3>Informações do País</h3>
+                        <p>Além do clima, obtenha informações detalhadas sobre o país da cidade pesquisada.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta-section py-5 text-center">
+        <div class="container">
+            <h2 class="mb-4">Pronto para começar?</h2>
+            <p class="lead mb-4">Acesse agora mesmo e descubra como está o tempo em qualquer lugar do mundo.</p>
+            
+            @if (!ApiService.IsAuthenticated)
+            {
+                <NavLink class="btn btn-primary btn-lg" href="/register">
+                    <i class="bi bi-lightning-charge me-2"></i>Comece Agora
+                </NavLink>
+            }
+            else
+            {
+                <NavLink class="btn btn-primary btn-lg" href="/weather">
+                    <i class="bi bi-cloud-sun me-2"></i>Ver Previsão do Tempo
+                </NavLink>
+            }
+        </div>
+    </section>
+</div>
+
+@code {
+    private List<Favorite> favorites = new();
+    private bool isFavLoading = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await ApiService.LoadToken();
+
+            if (ApiService.IsAuthenticated)
+            {
+                isFavLoading = true;
+                StateHasChanged();
+                favorites = await ApiService.GetFavorites();
+                isFavLoading = false;
+                StateHasChanged();
+            }
+        }
+    }
+}

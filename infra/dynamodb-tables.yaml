@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: DynamoDB tables for GloboClima API (Users, Favorites)
+
+Parameters:
+  UsersTableName:
+    Type: String
+    Default: Users
+    Description: Name of the Users table
+  FavoritesTableName:
+    Type: String
+    Default: Favorites
+    Description: Name of the Favorites table
+  BillingMode:
+    Type: String
+    Default: PAY_PER_REQUEST
+    AllowedValues: [PROVISIONED, PAY_PER_REQUEST]
+    Description: Billing mode for DynamoDB tables
+
+Resources:
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref UsersTableName
+      BillingMode: !Ref BillingMode
+      AttributeDefinitions:
+        - AttributeName: Id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Id
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  FavoritesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref FavoritesTableName
+      BillingMode: !Ref BillingMode
+      AttributeDefinitions:
+        - AttributeName: Id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Id
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+Outputs:
+  UsersTableNameOut:
+    Value: !Ref UsersTable
+    Export:
+      Name: GloboClima-UsersTableName
+  FavoritesTableNameOut:
+    Value: !Ref FavoritesTable
+    Export:
+      Name: GloboClima-FavoritesTableName

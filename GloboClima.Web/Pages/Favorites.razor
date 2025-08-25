@@ -1,0 +1,108 @@
+@page "/favorites"
+@using GloboClima.Web.Models
+@using GloboClima.Web.Services
+@inject ApiService ApiService
+@inject NavigationManager NavigationManager
+
+<div class="favorites-page">
+    <div class="container">
+        <div class="d-flex align-items-end justify-content-between mb-3">
+            <div>
+                <h3 class="mb-1">⭐ Favoritos</h3>
+                <p class="text-muted mb-0">Acesse rapidamente suas cidades e países salvos.</p>
+            </div>
+        </div>
+
+        @if (isLoading)
+        {
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Carregando...</span>
+                </div>
+            </div>
+        }
+        else if (favorites == null || !favorites.Any())
+        {
+            <div class="empty-state">
+                <i class="bi bi-bookmark-star display-4 d-block mb-2"></i>
+                <p class="mb-3">Você ainda não possui favoritos.</p>
+                <a class="btn btn-primary" href="/weather">
+                    <i class="bi bi-cloud-sun me-2"></i>Pesquisar cidades
+                </a>
+            </div>
+        }
+        else
+        {
+            <div class="favorite-list cards-grid">
+                @foreach (var item in favorites)
+                {
+                    <div class="favorite-item">
+                        <div class="favorite-meta">
+                            <span class="favorite-badge">@item.Type</span>
+                            <span class="favorite-name">@item.Name</span>
+                        </div>
+                        <div class="favorite-actions">
+                            @if (string.Equals(item.Type, "city", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <button class="btn btn-sm btn-primary" @onclick="() => OpenFavorite(item)">
+                                    <i class="bi bi-box-arrow-up-right me-1"></i>Abrir
+                                </button>
+                            }
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(item.Id)">
+                                <i class="bi bi-trash me-1"></i>Excluir
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+    
+</div>
+
+@code {
+    private List<Favorite> favorites = new();
+    private bool isLoading = false;
+
+    protected override void OnInitialized()
+    {
+        isLoading = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await ApiService.LoadToken();
+            if (!ApiService.IsAuthenticated)
+            {
+                NavigationManager.NavigateTo("/login", true);
+                return;
+            }
+
+            favorites = await ApiService.GetFavorites();
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OpenFavorite(Favorite item)
+    {
+        if (item == null) return;
+        if (string.Equals(item.Type, "city", StringComparison.OrdinalIgnoreCase))
+        {
+            var q = Uri.EscapeDataString(item.Name ?? string.Empty);
+            NavigationManager.NavigateTo($"/weather?city={q}");
+        }
+    }
+
+    private async Task Delete(string id)
+    {
+        var success = await ApiService.DeleteFavorite(id);
+        if (success)
+        {
+            favorites.RemoveAll(f => f.Id == id);
+            StateHasChanged();
+        }
+    }
+}

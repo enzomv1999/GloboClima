@@ -1,0 +1,119 @@
+{
+  "taskDefinitionArn": "arn:aws:ecs:us-east-2:910350406968:task-definition/globo-clima-api-task:5",
+  "containerDefinitions": [
+      {
+          "name": "globo-clima-web",
+          "image": "910350406968.dkr.ecr.us-east-2.amazonaws.com/globo-clima-api:latest",
+          "cpu": 0,
+          "portMappings": [
+              {
+                  "name": "globo-clima-web-5000-tcp",
+                  "containerPort": 5000,
+                  "hostPort": 5000,
+                  "protocol": "tcp",
+                  "appProtocol": "http"
+              }
+          ],
+          "essential": true,
+          "environment": [
+              {
+                  "name": "ASPNETCORE_URLS",
+                  "value": "http://0.0.0.0:5000"
+              }
+          ],
+         "secrets": [
+          {
+            "name": "Jwt__Key",
+            "valueFrom": "arn:aws:secretsmanager:us-east-2:910350406968:secret:prod/JWT_API-R1nJjl:JWT_KEY::"
+          },
+          {
+            "name": "JWT_KEY",
+            "valueFrom": "arn:aws:secretsmanager:us-east-2:910350406968:secret:prod/JWT_API-R1nJjl:JWT_KEY::"
+          },
+          {
+            "name": "OPENWEATHER_API_KEY",
+            "valueFrom": "arn:aws:secretsmanager:us-east-2:910350406968:secret:prod/JWT_API-R1nJjl:OPENWEATHER_API_KEY::"
+          }
+        ],
+          "environmentFiles": [],
+          "mountPoints": [],
+          "volumesFrom": [],
+          "ulimits": [],
+          "logConfiguration": {
+              "logDriver": "awslogs",
+              "options": {
+                  "awslogs-group": "/ecs/globo-clima-api-task",
+                  "awslogs-create-group": "true",
+                  "awslogs-region": "us-east-2",
+                  "awslogs-stream-prefix": "ecs"
+              },
+              "secretOptions": []
+          },
+          "healthCheck": {
+              "command": [
+                  "CMD-SHELL",
+                  "curl -f http://localhost:5000/api/health || exit 1"
+              ],
+              "interval": 30,
+              "timeout": 5,
+              "retries": 3,
+              "startPeriod": 10
+          },
+          "systemControls": []
+      }
+  ],
+  "family": "globo-clima-api-task",
+  "taskRoleArn": "arn:aws:iam::910350406968:role/ecsTaskExecutionRole",
+  "executionRoleArn": "arn:aws:iam::910350406968:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "revision": 5,
+  "volumes": [],
+  "status": "ACTIVE",
+  "requiresAttributes": [
+      {
+          "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
+      },
+      {
+          "name": "ecs.capability.execution-role-awslogs"
+      },
+      {
+          "name": "com.amazonaws.ecs.capability.ecr-auth"
+      },
+      {
+          "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
+      },
+      {
+          "name": "com.amazonaws.ecs.capability.task-iam-role"
+      },
+      {
+          "name": "ecs.capability.execution-role-ecr-pull"
+      },
+      {
+          "name": "com.amazonaws.ecs.capability.docker-remote-api.1.18"
+      },
+      {
+          "name": "ecs.capability.task-eni"
+      },
+      {
+          "name": "com.amazonaws.ecs.capability.docker-remote-api.1.29"
+      }
+  ],
+  "placementConstraints": [],
+  "compatibilities": [
+      "EC2",
+      "FARGATE"
+  ],
+  "requiresCompatibilities": [
+      "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "runtimePlatform": {
+      "cpuArchitecture": "X86_64",
+      "operatingSystemFamily": "LINUX"
+  },
+  "registeredAt": "2025-08-20T13:10:28.318Z",
+  "registeredBy": "arn:aws:iam::910350406968:root",
+  "enableFaultInjection": false,
+  "tags": []
+}

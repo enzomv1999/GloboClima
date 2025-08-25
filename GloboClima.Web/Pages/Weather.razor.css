@@ -1,0 +1,38 @@
+.weather-page { background: var(--body-bg); min-height: 60vh; }
+
+.search-container {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: .75rem;
+  padding: .75rem;
+}
+.search-container .input-group-text { background: var(--card-bg); border-color: var(--card-border); }
+.search-container .form-control { background: var(--card-bg); color: var(--body-color); border-color: var(--card-border); }
+.search-container .form-control:focus { box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .15); }
+
+.search-results { background: var(--card-bg); border-color: var(--card-border); border-radius: .5rem; overflow: hidden; }
+.search-result-item { transition: background-color .15s ease, padding-left .15s ease; }
+.search-result-item:hover { background: rgba(var(--bs-primary-rgb), .06); padding-left: 1.1rem; }
+
+.weather-card { border-radius: .75rem; overflow: hidden; }
+.weather-card .card-body { background: var(--card-bg); }
+
+.weather-current { border-radius: .75rem; box-shadow: 0 8px 24px rgba(var(--bs-primary-rgb), .25); }
+.weather-current .weather-icon i { filter: drop-shadow(0 4px 12px rgba(0,0,0,.25)); }
+
+.weather-details .detail-card { 
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.weather-details .detail-card:hover { 
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,.08);
+  border-color: var(--primary-color);
+}
+
+.country-info { border-top: 1px solid var(--card-border); }
+.country-info .info-item { display: flex; align-items: center; color: var(--body-color); }
+.country-info .info-item i { opacity: .75; }
+
+.toast-container { z-index: 1080; }

@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  api:
+    build:
+      context: .
+      dockerfile: GloboClima.API/Dockerfile
+    ports:
+      - "7052:80"
+  web:
+    build:
+      context: .
+      dockerfile: GloboClima.Web/Dockerfile
+    ports:
+      - "7034:80"

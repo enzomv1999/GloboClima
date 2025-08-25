@@ -1,0 +1,73 @@
+{
+  "taskDefinitionArn": "arn:aws:ecs:us-east-2:910350406968:task-definition/globo-clima-web-task:4",
+  "containerDefinitions": [
+      {
+          "name": "globo-clima-web",
+          "image": "910350406968.dkr.ecr.us-east-2.amazonaws.com/globo-clima-web:v1.1.0",
+          "cpu": 0,
+          "portMappings": [
+              {
+                  "name": "globo-clima-web-80-tcp",
+                  "containerPort": 80,
+                  "hostPort": 80,
+                  "protocol": "tcp"
+              }
+          ],
+          "essential": true,
+          "environment": [
+              {
+                  "name": "ASPNETCORE_URLS",
+                  "value": "http://0.0.0.0:80"
+              },
+              {
+                  "name": "ApiBaseUrl",
+                  "value": "http://globo-clima-api-alb-1057946886.us-east-2.elb.amazonaws.com/api/"
+              }
+          ],
+          "logConfiguration": {
+            "logDriver": "awslogs",
+            "options": {
+              "awslogs-group": "/ecs/globo-clima-web-task",
+              "awslogs-region": "us-east-2",
+              "awslogs-stream-prefix": "ecs"
+            }
+          },
+          "mountPoints": [],
+          "volumesFrom": [],
+          "systemControls": []
+      }
+  ],
+  "family": "globo-clima-web-task",
+  "executionRoleArn": "arn:aws:iam::910350406968:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "revision": 4,
+  "volumes": [],
+  "status": "ACTIVE",
+  "requiresAttributes": [
+      {
+          "name": "com.amazonaws.ecs.capability.ecr-auth"
+      },
+      {
+          "name": "ecs.capability.execution-role-ecr-pull"
+      },
+      {
+          "name": "com.amazonaws.ecs.capability.docker-remote-api.1.18"
+      },
+      {
+          "name": "ecs.capability.task-eni"
+      }
+  ],
+  "placementConstraints": [],
+  "compatibilities": [
+      "EC2",
+      "FARGATE"
+  ],
+  "requiresCompatibilities": [
+      "FARGATE"
+  ],
+  "cpu": "256",
+  "memory": "2048",
+  "registeredAt": "2025-08-19T20:41:13.039Z",
+  "registeredBy": "arn:aws:iam::910350406968:root",
+  "tags": []
+}

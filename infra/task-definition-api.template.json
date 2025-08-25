@@ -1,0 +1,51 @@
+{
+  "family": "globo-clima-api-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::910350406968:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "globo-clima-web",
+      "image": "910350406968.dkr.ecr.us-east-2.amazonaws.com/globo-clima-api:latest",
+      "portMappings": [
+        { "containerPort": 5000, "hostPort": 5000, "protocol": "tcp" }
+      ],
+      "essential": true,
+      "environment": [
+        { "name": "ASPNETCORE_URLS", "value": "http://0.0.0.0:5000" }
+      ],
+      "secrets": [
+        {
+          "name": "Jwt__Key",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:910350406968:secret:prod/JWT_API-R1nJjl:JWT_KEY::"
+        },
+        {
+          "name": "JWT_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:910350406968:secret:prod/JWT_API-R1nJjl:JWT_KEY::"
+        },
+        {
+          "name": "OPENWEATHER_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:910350406968:secret:prod/JWT_API-R1nJjl:OPENWEATHER_API_KEY::"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/globo-clima-api-task",
+          "awslogs-create-group": "true",
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+"command": ["CMD-SHELL", "curl -fsSL -H 'X-Forwarded-Proto: http' http://localhost:5000/api/health || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 40
+      }
+    }
+  ]
+}

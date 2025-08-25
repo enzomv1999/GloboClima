@@ -1,0 +1,371 @@
+name: Deploy to AWS ECS
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
+  SERVICE_NAME_API: ${{ secrets.SERVICE_NAME_API }}
+  SERVICE_NAME_WEB: ${{ secrets.SERVICE_NAME_WEB }}
+  ECR_REPO_API: ${{ secrets.ECR_REPO_API }}
+  ECR_REPO_WEB: ${{ secrets.ECR_REPO_WEB }}
+  DOTNET_CLI_HOME: ${{ github.workspace }}/.dotnet
+  NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Install jq
+      run: sudo apt-get update && sudo apt-get install -y jq
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Prepare .NET directories
+      shell: bash
+      run: |
+        mkdir -p "$DOTNET_CLI_HOME" "$NUGET_PACKAGES"
+        echo "DOTNET_CLI_HOME=$DOTNET_CLI_HOME"
+        echo "NUGET_PACKAGES=$NUGET_PACKAGES"
+
+    - name: Restore dependencies
+      shell: bash
+      run: dotnet restore -p:RestorePackagesPath="$NUGET_PACKAGES"
+
+    - name: Run tests (if any) with DynamoDB Local and coverage
+      shell: bash
+      run: |
+        set -euo pipefail
+        shopt -s globstar nullglob
+        mkdir -p TestResults
+        docker rm -f dynamodb >/dev/null 2>&1 || true
+        docker run -d --name dynamodb -p 8000:8000 amazon/dynamodb-local:latest
+        echo "Waiting for DynamoDB Local to be ready..."
+        sleep 3
+        found=false
+        for p in **/*Tests*.csproj; do
+          found=true
+          thr=0
+          if [[ "$p" == *IntegrationTests*.csproj ]]; then thr=50; fi
+          echo "Testing $p with coverage (threshold ${thr}%)"
+          DDB_LOCAL_URL=http://localhost:8000 \
+          dotnet test "$p" \
+            --configuration Release \
+            --logger "trx;LogFileName=$(basename "$p" .csproj).trx" \
+            --results-directory ./TestResults \
+            /p:CollectCoverage=true \
+            /p:CoverletOutput=./TestResults/$(basename "$p" .csproj).coverage. \
+            /p:CoverletOutputFormat=cobertura \
+            /p:Threshold=${thr} \
+            /p:ThresholdType=line
+        done
+        if [ "$found" = false ]; then
+          echo "No test projects found. Skipping tests."
+        fi
+        docker logs dynamodb || true
+        docker rm -f dynamodb || true
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: TestResults/**/*.trx
+        if-no-files-found: ignore
+        retention-days: 7
+
+    - name: Upload coverage reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-reports
+        path: |
+          TestResults/*.coverage.cobertura.xml
+        if-no-files-found: ignore
+        retention-days: 7
+
+    - name: Build and Push API Image
+      run: |
+        docker build --platform=linux/amd64 -t $ECR_REPO_API:latest -f GloboClima.API/Dockerfile GloboClima.API
+        docker tag $ECR_REPO_API:latest ${{ steps.login-ecr.outputs.registry }}/$ECR_REPO_API:latest
+        docker push ${{ steps.login-ecr.outputs.registry }}/$ECR_REPO_API:latest
+
+    - name: Build and Push Web Image
+      run: |
+        docker build --platform=linux/amd64 -t $ECR_REPO_WEB:latest -f GloboClima.Web/Dockerfile GloboClima.Web
+        docker tag $ECR_REPO_WEB:latest ${{ steps.login-ecr.outputs.registry }}/$ECR_REPO_WEB:latest
+        docker push ${{ steps.login-ecr.outputs.registry }}/$ECR_REPO_WEB:latest
+
+    - name: Update API task definition to :latest and deploy
+      run: |
+        set -euo pipefail
+        REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+        
+        API_TD_ARN=$(aws ecs describe-services \
+          --cluster "$CLUSTER_NAME" \
+          --services "$SERVICE_NAME_API" \
+          --query "services[0].taskDefinition" \
+          --output text)
+        
+        aws ecs describe-task-definition \
+          --task-definition "$API_TD_ARN" \
+          --query "taskDefinition" \
+          --output json > td_api.json
+       
+        API_CONTAINER=$(jq -r '.containerDefinitions[0].name' td_api.json)
+        
+        jq --arg IMG "$REGISTRY/$ECR_REPO_API:latest" --arg CN "$API_CONTAINER" \
+           --arg JWT_ARN "arn:aws:secretsmanager:us-east-2:910350406968:secret:prod/JWT_API-R1nJjl:JWT_KEY::" \
+           --arg OW_ARN "arn:aws:secretsmanager:us-east-2:910350406968:secret:prod/JWT_API-R1nJjl:OPENWEATHER_API_KEY::" '
+          del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredBy, .registeredAt, .deregisteredAt, .tags)
+          | .containerDefinitions = (
+              .containerDefinitions | map(
+                if .name == $CN then
+                  .image = $IMG
+                  | .portMappings = [ { "containerPort": 5000, "hostPort": 5000, "protocol": "tcp" } ]
+                  | .environment = (
+                      if ((.environment // []) | map(.name == "ASPNETCORE_URLS") | any) then
+                        (.environment // []) | map(
+                          if .name == "ASPNETCORE_URLS" then {"name":"ASPNETCORE_URLS","value":"http://0.0.0.0:5000"} else . end
+                        )
+                      else
+                        (.environment // []) + [{"name":"ASPNETCORE_URLS","value":"http://0.0.0.0:5000"}]
+                      end
+                    )
+                  | .secrets = [
+                      {"name":"Jwt__Key","valueFrom":$JWT_ARN},
+                      {"name":"JWT_KEY","valueFrom":$JWT_ARN},
+                      {"name":"OPENWEATHER_API_KEY","valueFrom":$OW_ARN}
+                    ]
+                  | .healthCheck = (
+                      (.healthCheck // {})
+                      | .command = ["CMD-SHELL","curl -fsS http://localhost:5000/api/health || exit 1"]
+                      | .interval = 30
+                      | .timeout = 5
+                      | .retries = 3
+                      | .startPeriod = 40
+                    )
+                else . end
+              )
+            )
+        ' td_api.json > td_api_mod.json
+        
+        NEW_API_TD_ARN=$(aws ecs register-task-definition \
+          --cli-input-json file://td_api_mod.json \
+          --query "taskDefinition.taskDefinitionArn" \
+          --output text)
+        aws ecs update-service \
+          --cluster "$CLUSTER_NAME" \
+          --service "$SERVICE_NAME_API" \
+          --task-definition "$NEW_API_TD_ARN"
+
+    - name: Update Web task definition to :latest and deploy
+      run: |
+        set -euo pipefail
+        REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+        
+        WEB_TD_ARN=$(aws ecs describe-services \
+          --cluster "$CLUSTER_NAME" \
+          --services "$SERVICE_NAME_WEB" \
+          --query "services[0].taskDefinition" \
+          --output text)
+        
+        aws ecs describe-task-definition \
+          --task-definition "$WEB_TD_ARN" \
+          --query "taskDefinition" \
+          --output json > td_web.json
+       
+        WEB_CONTAINER=$(jq -r '.containerDefinitions[0].name' td_web.json)
+        
+        jq --arg IMG "$REGISTRY/$ECR_REPO_WEB:latest" --arg CN "$WEB_CONTAINER" '
+          del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredBy, .registeredAt, .deregisteredAt, .tags)
+          | .containerDefinitions = (
+              .containerDefinitions | map(
+                if .name == $CN then
+                  .image = $IMG
+                  | .portMappings = [ { "containerPort": 80, "hostPort": 80, "protocol": "tcp" } ]
+                  | .environment = (
+                      if ((.environment // []) | map(.name == "ASPNETCORE_URLS") | any) then
+                        (.environment // []) | map(
+                          if .name == "ASPNETCORE_URLS" then {"name":"ASPNETCORE_URLS","value":"http://0.0.0.0:80"} else . end
+                        )
+                      else
+                        (.environment // []) + [{"name":"ASPNETCORE_URLS","value":"http://0.0.0.0:80"}]
+                      end
+                    )
+                else . end
+              )
+            )
+        ' td_web.json > td_web_mod.json
+       
+        NEW_WEB_TD_ARN=$(aws ecs register-task-definition \
+          --cli-input-json file://td_web_mod.json \
+          --query "taskDefinition.taskDefinitionArn" \
+          --output text)
+        aws ecs update-service \
+          --cluster "$CLUSTER_NAME" \
+          --service "$SERVICE_NAME_WEB" \
+          --task-definition "$NEW_WEB_TD_ARN"
+
+    - name: Fix API service load balancer mapping (containerName/port)
+      run: |
+        set -euo pipefail
+        API_TG=$(aws ecs describe-services \
+          --cluster "$CLUSTER_NAME" \
+          --services "$SERVICE_NAME_API" \
+          --query "services[0].loadBalancers[0].targetGroupArn" \
+          --output text)
+        API_TD=$(aws ecs describe-services \
+          --cluster "$CLUSTER_NAME" \
+          --services "$SERVICE_NAME_API" \
+          --query "services[0].taskDefinition" \
+          --output text)
+        aws ecs describe-task-definition \
+          --task-definition "$API_TD" \
+          --query "taskDefinition" \
+          --output json > td_api_current.json
+        API_CONTAINER=$(jq -r '.containerDefinitions[] | select((.portMappings//[]) | map(.containerPort==5000) | any) | .name' td_api_current.json)
+        if [ -z "$API_CONTAINER" ] || [ "$API_CONTAINER" = "null" ]; then
+          API_CONTAINER=$(jq -r '.containerDefinitions[0].name' td_api_current.json)
+        fi
+        echo "Using API container name: $API_CONTAINER"
+        aws ecs update-service \
+          --cluster "$CLUSTER_NAME" \
+          --service "$SERVICE_NAME_API" \
+          --load-balancers targetGroupArn=$API_TG,containerName=$API_CONTAINER,containerPort=5000 \
+          --force-new-deployment
+        echo "After update (API) LB mapping:" && \
+        aws ecs describe-services \
+          --cluster "$CLUSTER_NAME" \
+          --services "$SERVICE_NAME_API" \
+          --query "services[0].loadBalancers"
+
+    - name: Ensure API Target Group health check is /api/health
+      run: |
+        set -euo pipefail
+        API_TG=$(aws ecs describe-services \
+          --cluster "$CLUSTER_NAME" \
+          --services "$SERVICE_NAME_API" \
+          --query "services[0].loadBalancers[0].targetGroupArn" \
+          --output text)
+        CURRENT_PATH=$(aws elbv2 describe-target-groups \
+          --target-group-arns "$API_TG" \
+          --query "TargetGroups[0].HealthCheckPath" \
+          --output text)
+        echo "Current TG HC Path: $CURRENT_PATH"
+        if [ "$CURRENT_PATH" != "/api/health" ]; then
+          echo "Updating TG health check to /api/health"
+          aws elbv2 modify-target-group \
+            --target-group-arn "$API_TG" \
+            --health-check-path "/api/health" \
+            --health-check-protocol HTTP \
+            --health-check-port traffic-port \
+            --matcher HttpCode=200-399 \
+            --healthy-threshold-count 2 \
+            --unhealthy-threshold-count 3 \
+            --health-check-interval-seconds 30 \
+            --health-check-timeout-seconds 5
+        fi
+        aws elbv2 describe-target-groups --target-group-arns "$API_TG" --output table
+
+    - name: Wait until API targets become healthy
+      run: |
+        set -euo pipefail
+        API_TG=$(aws ecs describe-services \
+          --cluster "$CLUSTER_NAME" \
+          --services "$SERVICE_NAME_API" \
+          --query "services[0].loadBalancers[0].targetGroupArn" \
+          --output text)
+        echo "Waiting for targets to be healthy (can take a few minutes)"
+        for i in 1 2 3; do
+          if aws elbv2 wait target-in-service --target-group-arn "$API_TG"; then
+            echo "Targets are healthy"; break; fi
+          echo "Wait attempt $i failed; describing target health for context:";
+          aws elbv2 describe-target-health --target-group-arn "$API_TG" --output json || true
+          sleep 20
+        done
+
+    - name: Show API Target Group health check and target health
+      run: |
+        set -euo pipefail
+        API_TG=$(aws ecs describe-services \
+          --cluster "$CLUSTER_NAME" \
+          --services "$SERVICE_NAME_API" \
+          --query "services[0].loadBalancers[0].targetGroupArn" \
+          --output text)
+        echo "Target Group: $API_TG"
+        aws elbv2 describe-target-groups \
+          --target-group-arns "$API_TG" \
+          --query "TargetGroups[0].[Port,TargetType,HealthCheckPort,HealthCheckProtocol,HealthCheckPath]" \
+          --output table
+        aws elbv2 describe-target-health \
+          --target-group-arn "$API_TG" \
+          --output json
+
+    - name: Show last ECS events (API)
+      run: |
+        aws ecs describe-services \
+          --cluster "$CLUSTER_NAME" \
+          --services "$SERVICE_NAME_API" \
+          --query "services[0].events[0:10].[createdAt,message]" \
+          --output table
+
+    - name: Fix Web service load balancer mapping (containerName/port)
+      run: |
+        set -euo pipefail
+        WEB_TG=$(aws ecs describe-services \
+          --cluster "$CLUSTER_NAME" \
+          --services "$SERVICE_NAME_WEB" \
+          --query "services[0].loadBalancers[0].targetGroupArn" \
+          --output text)
+        WEB_TD=$(aws ecs describe-services \
+          --cluster "$CLUSTER_NAME" \
+          --services "$SERVICE_NAME_WEB" \
+          --query "services[0].taskDefinition" \
+          --output text)
+        aws ecs describe-task-definition \
+          --task-definition "$WEB_TD" \
+          --query "taskDefinition" \
+          --output json > td_web_current.json
+        WEB_CONTAINER=$(jq -r '.containerDefinitions[] | select((.portMappings//[]) | map(.containerPort==80) | any) | .name' td_web_current.json)
+        if [ -z "$WEB_CONTAINER" ] || [ "$WEB_CONTAINER" = "null" ]; then
+          WEB_CONTAINER=$(jq -r '.containerDefinitions[0].name' td_web_current.json)
+        fi
+        echo "Using WEB container name: $WEB_CONTAINER"
+        aws ecs update-service \
+          --cluster "$CLUSTER_NAME" \
+          --service "$SERVICE_NAME_WEB" \
+          --load-balancers targetGroupArn=$WEB_TG,containerName=$WEB_CONTAINER,containerPort=80 \
+          --force-new-deployment
+        echo "After update (WEB) LB mapping:" && \
+        aws ecs describe-services \
+          --cluster "$CLUSTER_NAME" \
+          --services "$SERVICE_NAME_WEB" \
+          --query "services[0].loadBalancers"
+
+    - name: Export AWS credentials to environment
+      run: |
+        echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> $GITHUB_ENV
+        echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> $GITHUB_ENV
+

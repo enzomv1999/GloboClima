@@ -1,0 +1,175 @@
+@page "/register"
+@using GloboClima.Web.Models
+@using GloboClima.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject ApiService ApiService
+@inject NavigationManager NavigationManager
+@inject NotificationService NotificationService
+@inject IThemeService ThemeService
+
+<div class="auth-page">
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <div class="logo-container">
+                    <i class="bi bi-cloud-sun-fill logo-icon"></i>
+                    <h1>GloboClima</h1>
+                </div>
+                <h2>Criar uma conta</h2>
+                <p class="text-muted">Preencha os dados para se cadastrar</p>
+            </div>
+
+            @if (!string.IsNullOrEmpty(Message))
+            {
+                <div class="alert @(isSuccess ? "alert-success" : "alert-danger")" role="alert">
+                    <i class="bi @(isSuccess ? "bi-check-circle-fill" : "bi-exclamation-triangle-fill") me-2"></i>@Message
+                </div>
+            }
+
+            <EditForm Model="registerModel" OnValidSubmit="HandleRegister" class="auth-form">
+                <DataAnnotationsValidator />
+                
+                <div class="form-group">
+                    <label for="username" class="form-label">Usuário</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
+                        <InputText id="username" class="form-control form-control-lg" 
+                                 @bind-Value="registerModel.Username" 
+                                 placeholder="Digite um nome de usuário" />
+                    </div>
+                    <div class="form-text">Mínimo de 5 caracteres</div>
+                    <ValidationMessage For="@(() => registerModel.Username)" class="text-danger small" />
+                </div>
+                
+                <div class="form-group">
+                    <label for="password" class="form-label">Senha</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+                        <InputText id="password" type="password" 
+                                 class="form-control form-control-lg" 
+                                 @bind-Value="registerModel.Password" 
+                                 placeholder="••••••••" />
+                    </div>
+                    <div class="form-text">Mínimo de 5 caracteres</div>
+                    <ValidationMessage For="@(() => registerModel.Password)" class="text-danger small" />
+                </div>
+
+                <div class="form-group">
+                    <label for="confirmPassword" class="form-label">Confirmar Senha</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+                        <InputText id="confirmPassword" type="password" 
+                                 class="form-control form-control-lg" 
+                                 @bind-Value="confirmPassword" 
+                                 placeholder="••••••••" />
+                    </div>
+                    @if (!string.IsNullOrEmpty(confirmPassword) && registerModel.Password != confirmPassword)
+                    {
+                        <div class="text-danger small">As senhas não coincidem</div>
+                    }
+                </div>
+
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary btn-lg w-100" 
+                            disabled="@(isLoading || registerModel.Password != confirmPassword)">
+                        @if (isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            <span>Cadastrando...</span>
+                        }
+                        else
+                        {
+                            <span>Cadastrar</span>
+                        }
+                    </button>
+                </div>
+            </EditForm>
+
+            <div class="auth-footer">
+                <p class="text-muted">
+                    Já tem uma conta? 
+                    <a href="/login" class="auth-link">Fazer login</a>
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="auth-background">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+    </div>
+</div>
+
+@code {
+    private User registerModel = new();
+    private string confirmPassword = string.Empty;
+    private string Message = string.Empty;
+    private bool isLoading = false;
+    private bool isSuccess = false;
+
+    protected override void OnInitialized()
+    {
+        if (ApiService.IsAuthenticated)
+        {
+            NavigationManager.NavigateTo("/");
+        }
+    }
+
+    private async Task HandleRegister()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(registerModel.Username) || registerModel.Username.Length < 5)
+            {
+                Message = "O nome de usuário deve ter no mínimo 5 caracteres.";
+                isSuccess = false;
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(registerModel.Password) || registerModel.Password.Length < 5)
+            {
+                Message = "A senha deve ter no mínimo 5 caracteres.";
+                isSuccess = false;
+                return;
+            }
+
+            if (registerModel.Password != confirmPassword)
+            {
+                Message = "As senhas não coincidem.";
+                isSuccess = false;
+                return;
+            }
+
+            isLoading = true;
+            StateHasChanged();
+
+            var success = await ApiService.Register(registerModel);
+            
+            if (success)
+            {
+                isSuccess = true;
+                Message = "Cadastro realizado com sucesso! Redirecionando para login...";
+                await NotificationService.ShowSuccessAsync("Conta criada com sucesso!");
+                
+                await Task.Delay(2000);
+                NavigationManager.NavigateTo("/login");
+            }
+            else
+            {
+                isSuccess = false;
+                Message = "Não foi possível completar o cadastro. O nome de usuário já pode estar em uso.";
+            }
+        }
+        catch (Exception ex)
+        {
+            isSuccess = false;
+            Message = $"Ocorreu um erro: {ex.Message}";
+            Console.Error.WriteLine($"Registration error: {ex}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+}

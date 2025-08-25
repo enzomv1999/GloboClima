@@ -1,0 +1,30 @@
+{
+  "family": "globo-clima-web-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::910350406968:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "globo-clima-web",
+      "image": "910350406968.dkr.ecr.us-east-2.amazonaws.com/globo-clima-web:latest",
+      "portMappings": [
+        { "containerPort": 80, "protocol": "tcp" }
+      ],
+      "essential": true,
+      "environment": [
+        { "name": "ASPNETCORE_URLS", "value": "http://0.0.0.0:80" },
+        { "name": "ApiBaseUrl", "value": "http://globo-clima-api-alb-1057946886.us-east-2.elb.amazonaws.com/api/" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/globo-clima-web-task",
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}
